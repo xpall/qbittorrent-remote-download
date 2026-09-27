@@ -32,6 +32,15 @@ VIDEO_EXTENSIONS = {
     ".wmv",
 }
 
+SUBTITLE_EXTENSION = ".srt"
+
+# "english", "eng" or "en" as a separate token (e.g. Movie.en.srt,
+# Movie.en-US.srt, Subs/English.srt) without matching words that merely
+# contain those letters (Extended.srt, Se7en.srt, 1080p.srt).
+ENGLISH_SUBTITLE_RE = re.compile(
+    r"(?:^|[^a-z0-9])(?:english|eng|en)(?:[^a-z0-9]|$)", re.IGNORECASE
+)
+
 MAX_NAME_LENGTH = 150
 
 
@@ -92,6 +101,33 @@ def sanitize_name(value: str, label: str) -> str:
 
 def is_video(path: str) -> bool:
     return os.path.splitext(path)[1].lower() in VIDEO_EXTENSIONS
+
+
+def is_subtitle(path: str) -> bool:
+    return path.lower().endswith(SUBTITLE_EXTENSION)
+
+
+def looks_english(path: str) -> bool:
+    """True when an .srt name carries an English language hint."""
+    stem = path.rsplit("/", 1)[-1]
+    if stem.lower().endswith(SUBTITLE_EXTENSION):
+        stem = stem[: -len(SUBTITLE_EXTENSION)]
+    return bool(ENGLISH_SUBTITLE_RE.search(stem))
+
+
+def choose_subtitle(files: Iterable[dict]) -> dict | None:
+    """Pick the best .srt for a movie: English first, then largest."""
+    candidates = [file for file in files if is_subtitle(str(file.get("name", "")))]
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda file: (
+            looks_english(str(file["name"])),
+            int(file.get("size") or 0),
+            str(file["name"]),
+        ),
+    )
 
 
 def desired_file_name(requested: str, old_path: str) -> str:

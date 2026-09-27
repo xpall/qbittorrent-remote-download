@@ -4,8 +4,10 @@ import pytest
 
 from naming import (
     InvalidName,
+    choose_subtitle,
     common_root,
     desired_file_name,
+    looks_english,
     parse_magnet_hash,
     sanitize_name,
     with_basename,
@@ -76,3 +78,46 @@ def test_common_root():
 def test_with_basename():
     assert with_basename("X/a.mkv", "b.mkv") == "X/b.mkv"
     assert with_basename("a.mkv", "b.mkv") == "b.mkv"
+
+
+def subtitle(name: str, size: int) -> dict:
+    return {"name": name, "size": size}
+
+
+def test_looks_english():
+    assert looks_english("Subs/English.srt")
+    assert looks_english("Folder/Movie.en.srt")
+    assert looks_english("Folder/Movie.en-US.srt")
+    assert looks_english("Folder/Movie.ENG.srt")
+    assert not looks_english("Folder/Movie.Extended.srt")
+    assert not looks_english("Folder/Movie.2024.1080p.WEB-DL.srt")
+    assert not looks_english("Folder/Se7en.srt")
+
+
+def test_choose_subtitle_prefers_english_even_when_smaller():
+    chosen = choose_subtitle(
+        [subtitle("F/English.srt", 10_000), subtitle("F/Spanish.srt", 90_000)]
+    )
+    assert chosen is not None
+    assert chosen["name"] == "F/English.srt"
+
+
+def test_choose_subtitle_picks_largest_english():
+    chosen = choose_subtitle(
+        [subtitle("F/Movie.en.srt", 40_000), subtitle("F/English.srt", 90_000)]
+    )
+    assert chosen is not None
+    assert chosen["name"] == "F/English.srt"
+
+
+def test_choose_subtitle_largest_when_no_english():
+    chosen = choose_subtitle(
+        [subtitle("F/Spanish.srt", 90_000), subtitle("F/French.srt", 40_000)]
+    )
+    assert chosen is not None
+    assert chosen["name"] == "F/Spanish.srt"
+
+
+def test_choose_subtitle_ignores_other_formats():
+    assert choose_subtitle([subtitle("F/Movie.ass", 90_000)]) is None
+    assert choose_subtitle([]) is None

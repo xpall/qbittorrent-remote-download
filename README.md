@@ -28,6 +28,11 @@ save folder and rename the download exactly like you would by hand.
    original extension unless you typed one yourself. For torrents with
    several video files (e.g. a season pack) only the largest is renamed —
    the UI tells you how many were found.
+5. It moves the best `.srt` next to the video and renames it to match
+   (`Subs/English.srt` → `Some Movie (2024)/Some Movie (2024).srt`), since
+   Jellyfin only looks for external subtitles beside the video. English
+   `.srt` files win over other languages; otherwise the largest is used.
+   Other subtitle files are left untouched.
 
 ## Requirements
 

@@ -116,7 +116,7 @@ def test_download_gets_renamed_end_to_end(tmp_path):
         names = sorted(file["name"] for file in torrent.files)
         assert names == [
             "Some Movie (2024)/Some Movie (2024).mkv",
-            "Some Movie (2024)/Subs/English.srt",
+            "Some Movie (2024)/Some Movie (2024).srt",
         ]
 
 

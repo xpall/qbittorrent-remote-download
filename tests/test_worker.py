@@ -42,11 +42,96 @@ def test_worker_renames_folder_and_largest_video(tmp_path):
         assert job.status == "named", job.message
         assert job.renamed_files == 1
         assert job.video_files == 1
+        assert "Moved subtitle" in job.message
 
         names = sorted(file["name"] for file in await client.torrent_files(job.hash))
         assert names == [
             "Dune Part Two (2024)/Dune Part Two (2024).mkv",
-            "Dune Part Two (2024)/Subs/English.srt",
+            "Dune Part Two (2024)/Dune Part Two (2024).srt",
+        ]
+
+    asyncio.run(scenario())
+
+
+def test_worker_prefers_english_subtitle_over_larger(tmp_path):
+    async def scenario():
+        client = MockQbitClient(metadata_delay=0.0, download_duration=60.0)
+        store = JobStore(tmp_path / "state.json")
+        worker = RenameWorker(client, store, poll_interval=0.01)
+
+        job = build(HASH_A, "Some Movie (2024)", "Some Movie (2024)")
+        await client.torrents_add(
+            magnet=job.magnet, save_path=job.save_path, name=job.folder_name
+        )
+        torrent = client.torrents[job.hash]
+        torrent.files.append(
+            {"name": f"{torrent.original_name}/Subs/Spanish.srt", "size": 900_000}
+        )
+        store.upsert(job)
+
+        await worker._process(job)
+
+        assert job.status == "named", job.message
+        names = sorted(file["name"] for file in await client.torrent_files(job.hash))
+        assert names == [
+            "Some Movie (2024)/Some Movie (2024).mkv",
+            "Some Movie (2024)/Some Movie (2024).srt",
+            "Some Movie (2024)/Subs/Spanish.srt",
+        ]
+
+    asyncio.run(scenario())
+
+
+def test_worker_leaves_subtitles_alone_without_file_name(tmp_path):
+    async def scenario():
+        client = MockQbitClient(metadata_delay=0.0, download_duration=60.0)
+        store = JobStore(tmp_path / "state.json")
+        worker = RenameWorker(client, store, poll_interval=0.01)
+
+        job = build(HASH_A, "Some Movie (2024)", "")
+        await client.torrents_add(
+            magnet=job.magnet, save_path=job.save_path, name=job.folder_name
+        )
+        store.upsert(job)
+
+        await worker._process(job)
+
+        assert job.status == "named", job.message
+        names = sorted(file["name"] for file in await client.torrent_files(job.hash))
+        assert names == [
+            "Some Movie (2024)/Original.Name.1080p.1080p.mkv",
+            "Some Movie (2024)/Subs/English.srt",
+        ]
+
+    asyncio.run(scenario())
+
+
+def test_worker_subtitle_already_in_place_is_noop(tmp_path):
+    async def scenario():
+        client = MockQbitClient(metadata_delay=0.0, download_duration=60.0)
+        store = JobStore(tmp_path / "state.json")
+        worker = RenameWorker(client, store, poll_interval=0.01)
+
+        job = build(HASH_A, "Some Movie (2024)", "Some Movie (2024)")
+        await client.torrents_add(
+            magnet=job.magnet, save_path=job.save_path, name=job.folder_name
+        )
+        torrent = client.torrents[job.hash]
+        original = torrent.original_name
+        torrent.files = [
+            {"name": f"{original}/{original}.1080p.mkv", "size": 2_400_000_000},
+            {"name": f"{original}/Some Movie (2024).srt", "size": 50_000},
+        ]
+        store.upsert(job)
+
+        await worker._process(job)
+
+        assert job.status == "named", job.message
+        assert "Moved subtitle" not in job.message
+        names = sorted(file["name"] for file in await client.torrent_files(job.hash))
+        assert names == [
+            "Some Movie (2024)/Some Movie (2024).mkv",
+            "Some Movie (2024)/Some Movie (2024).srt",
         ]
 
     asyncio.run(scenario())

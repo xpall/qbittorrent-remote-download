@@ -18,7 +18,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from naming import common_root, desired_file_name, is_video, with_basename
+from naming import (
+    choose_subtitle,
+    common_root,
+    desired_file_name,
+    is_video,
+    with_basename,
+)
 from qbittorrent import QbitAuthError, QbitClient, QbitError, QbitUnreachable
 
 logger = logging.getLogger(__name__)
@@ -225,6 +231,26 @@ class RenameWorker:
                 job.renamed_files = 1
                 if len(videos) > 1:
                     notes.append(f"{len(videos)} video files present; the largest was renamed.")
+
+                # 3) Move the chosen subtitle next to the renamed video.
+                subtitle = choose_subtitle(files)
+                if subtitle is not None:
+                    target_path = f"{os.path.splitext(new_path)[0]}.srt"
+                    target_name = target_path.rsplit("/", 1)[-1]
+                    if subtitle["name"] != target_path:
+                        try:
+                            await self.client.rename_file(
+                                job.hash, subtitle["name"], target_path
+                            )
+                            notes.append(
+                                f"Moved subtitle “{subtitle['name']}” to “{target_name}”."
+                            )
+                        except QbitError:
+                            current = await self._named_files(job.hash)
+                            if any(file["name"] == target_path for file in current):
+                                notes.append(f"Subtitle already in place as “{target_name}”.")
+                            else:
+                                raise
             else:
                 notes.append("No video files found; only the folder name was applied.")
         elif not notes:
