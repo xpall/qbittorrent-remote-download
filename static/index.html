@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Remote Download</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="page-head">
+    <div>
+      <h1>Remote Download</h1>
+      <p class="muted">Paste a magnet link, name it, and it lands in Jellyfin.</p>
+    </div>
+    <button type="button" id="refresh" class="icon-btn" title="Refresh" aria-label="Refresh">↻</button>
+  </header>
+
+  <div id="banner" class="banner hidden" role="status"></div>
+
+  <main>
+    <section class="card">
+      <form id="add-form" novalidate>
+        <div id="entries" class="entries"></div>
+        <div class="form-actions">
+          <button type="button" id="add-row" class="btn secondary">+ Add another</button>
+          <button type="submit" id="submit" class="btn primary">Add download(s)</button>
+        </div>
+      </form>
+      <div id="results" class="results hidden" aria-live="polite"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>Downloads</h2>
+        <span id="updated" class="muted"></span>
+      </div>
+      <div id="downloads" class="downloads">
+        <p class="muted empty">Nothing added yet.</p>
+      </div>
+    </section>
+  </main>
+
+  <template id="entry-template">
+    <div class="entry">
+      <div class="entry-head">
+        <div class="segmented" role="group" aria-label="Media type">
+          <button type="button" class="seg" data-type="movies">Movies</button>
+          <button type="button" class="seg" data-type="shows">Shows</button>
+        </div>
+        <button type="button" class="icon-btn remove" title="Remove entry" aria-label="Remove entry">×</button>
+      </div>
+      <label>
+        <span>Magnet link</span>
+        <textarea class="magnet" rows="3" placeholder="magnet:?xt=urn:btih:…" autocomplete="off" spellcheck="false"></textarea>
+      </label>
+      <label>
+        <span>Folder name</span>
+        <input class="folder" type="text" placeholder="Dune Part Two (2024)" autocomplete="off">
+      </label>
+      <label>
+        <span>File name <em class="muted">optional</em></span>
+        <input class="file" type="text" placeholder="Dune Part Two (2024)" autocomplete="off">
+      </label>
+      <p class="entry-error hidden"></p>
+    </div>
+  </template>
+
+  <template id="download-template">
+    <article class="download">
+      <div class="download-head">
+        <h3 class="title"></h3>
+        <span class="badge"></span>
+      </div>
+      <div class="progress"><div class="progress-fill"></div></div>
+      <div class="meta">
+        <span class="percent"></span>
+        <span class="speed"></span>
+        <span class="eta"></span>
+      </div>
+      <p class="status muted"></p>
+    </article>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>
