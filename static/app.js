@@ -36,7 +36,51 @@ const state = {
   submitting: false,
 };
 
+const THEME_KEY = "qbt-theme";
+
 const $ = (selector, root = document) => root.querySelector(selector);
+
+/* -- theme ------------------------------------------------------------- */
+
+function currentTheme() {
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const button = $("#theme-toggle");
+  if (!button) return;
+  const dark = theme === "dark";
+  const label = dark ? "Switch to light theme" : "Switch to dark theme";
+  button.setAttribute("aria-label", label);
+  button.title = label;
+}
+
+function setupTheme() {
+  applyTheme(currentTheme()); // the inline <head> script already resolved it
+
+  $("#theme-toggle").addEventListener("click", () => {
+    const next = currentTheme() === "dark" ? "light" : "dark";
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch (error) {
+      /* private mode: keep the choice for this page only */
+    }
+    applyTheme(next);
+  });
+
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
+    let stored = null;
+    try {
+      stored = localStorage.getItem(THEME_KEY);
+    } catch (error) {
+      /* ignore */
+    }
+    if (stored !== "light" && stored !== "dark") {
+      applyTheme(event.matches ? "dark" : "light");
+    }
+  });
+}
 
 function formatBytes(bytes) {
   const value = Number(bytes) || 0;
@@ -342,6 +386,8 @@ async function tick() {
 }
 
 async function init() {
+  setupTheme();
+
   try {
     const response = await fetch("/api/config");
     if (response.ok) {

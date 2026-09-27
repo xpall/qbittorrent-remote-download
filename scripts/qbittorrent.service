@@ -1,0 +1,15 @@
+[Unit]
+Description=qBittorrent download engine (Flatpak)
+Documentation=https://github.com/qbittorrent/qBittorrent
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/flatpak run org.qbittorrent.qBittorrent
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=graphical-session.target

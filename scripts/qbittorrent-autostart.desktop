@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=qBittorrent
+Comment=Start the qBittorrent download engine at login
+Exec=flatpak run org.qbittorrent.qBittorrent
+Terminal=false
+X-GNOME-Autostart-Delay=5
+X-KDE-autostart-after=panel

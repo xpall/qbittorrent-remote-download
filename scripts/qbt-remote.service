@@ -1,12 +1,14 @@
 [Unit]
 Description=qBittorrent remote download web app
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=%h/qbittorrent-remote-download
 ExecStart=%h/qbittorrent-remote-download/.venv/bin/python %h/qbittorrent-remote-download/main.py
-Restart=on-failure
+Environment=PYTHONUNBUFFERED=1
+Restart=always
 RestartSec=3
 
 [Install]
