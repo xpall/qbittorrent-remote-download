@@ -54,6 +54,23 @@ Keep qBittorrent running. The flatpak uses `--filesystem=host` and shares the
 network namespace, so the Web UI is reachable at `127.0.0.1:8080` and paths
 are the same inside and outside the sandbox.
 
+### Authentication
+
+Two options, both configured in `config.json`:
+
+1. **Username / password** (works on every qBittorrent version). Put the
+   Web UI credentials in `qbittorrent.username` / `qbittorrent.password`.
+   Note that if "Bypass authentication for clients on localhost" is enabled,
+   no username/password will ever be accepted by the login endpoint; the app
+   detects this and runs unauthenticated (`auth_mode: "none"` in
+   `/api/health`).
+2. **API key** (recommended, qBittorrent 5.2+). In qBittorrent open
+   **Tools → Options → Web UI → API Key**, click **Generate API key**
+   (it takes effect immediately), then **Copy API key**. Paste it into
+   `qbittorrent.api_key` in `config.json`. The app then sends
+   `Authorization: Bearer qbt_…` and skips the login flow entirely.
+   Username/password are ignored while a key is set.
+
 ## 2. Install and run
 
 ```bash
@@ -78,6 +95,7 @@ page is ready.
 | `bind_host` / `port` | Where the app listens. Keep `127.0.0.1` and let cloudflared in. |
 | `qbittorrent.base_url` | Usually `http://127.0.0.1:8080`. |
 | `qbittorrent.username` / `password` | Credentials from the Web UI settings. |
+| `qbittorrent.api_key` | Optional. When set (qBittorrent 5.2+), used instead of username/password. |
 | `libraries.movies` / `libraries.shows` | Where downloads land. Point these at the real folders, not the `/media` symlinks. |
 | `tag` | Tag added to torrents from this app. |
 | `max_batch` | Maximum entries per submission. |
@@ -132,7 +150,7 @@ curl -s -X POST http://127.0.0.1:8765/api/downloads \
 
 - `POST /api/downloads` → per-entry result (`ok`, `hash`, or an `error`).
 - `GET /api/downloads` → tracked requests plus live progress.
-- `GET /api/health` → qBittorrent reachability, version, library paths.
+- `GET /api/health` → qBittorrent reachability, version, auth mode, library paths.
 
 ## Development
 
@@ -147,6 +165,16 @@ QBT_REMOTE_MOCK=1 .venv/bin/python main.py   # fake qBittorrent, no downloads
 
 - **"Can't reach qBittorrent"** — is qBittorrent running and is the Web UI
   enabled on `127.0.0.1:8080`? Check credentials in `config.json`.
+- **"rejected the username or password" on qBittorrent 5.2+** — the login
+  endpoint layout changed in 5.2 (success is now `204` instead of `200 Ok.`);
+  this app handles both. If it still fails, the simplest fix is to generate
+  an API key (see *Authentication*) and put it in `config.json`. To see what
+  qBittorrent actually answers:
+  `curl -i -H 'Referer: http://127.0.0.1:8080' --data 'username=U&password=P' http://127.0.0.1:8080/api/v2/auth/login`
+  (`204` = correct credentials, `401` = rejected, `403` = banned).
+- **"Bypass authentication for clients on localhost" is enabled** — no
+  username/password can be validated then. The app notices and switches to
+  unauthenticated mode; `/api/health` reports `"auth_mode": "none"`.
 - **"temporarily banned this IP"** — too many failed logins; wait for the
   ban to expire (default 1 hour) or fix the password.
 - **Naming failed** — the download itself continues; the Downloads card shows

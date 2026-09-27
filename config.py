@@ -24,6 +24,9 @@ class QbittorrentConfig(BaseModel):
     base_url: str = "http://127.0.0.1:8080"
     username: str = "admin"
     password: str = ""
+    # Optional: a WebUI API key (qBittorrent 5.2+). When set, it is used
+    # instead of the username/password login flow.
+    api_key: str = ""
     request_timeout: float = 30.0
 
     @field_validator("base_url")

@@ -78,6 +78,7 @@ class MockQbitClient:
         self.metadata_delay = metadata_delay
         self.download_duration = download_duration
         self.torrents: dict[str, MockTorrent] = {}
+        self.auth_mode = "mock"
 
     async def close(self) -> None:
         return None

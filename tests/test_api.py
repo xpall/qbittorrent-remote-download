@@ -128,6 +128,7 @@ def test_health_and_config(tmp_path):
         payload = health.json()
         assert payload["qbittorrent"]["ok"] is True
         assert "mock" in payload["qbittorrent"]["version"]
+        assert payload["qbittorrent"]["auth_mode"] == "mock"
 
         config = client.get("/api/config").json()
         assert config["media_types"] == ["movies", "shows"]

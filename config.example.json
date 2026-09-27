@@ -5,6 +5,7 @@
     "base_url": "http://127.0.0.1:8080",
     "username": "admin",
     "password": "change-me",
+    "api_key": "",
     "request_timeout": 30.0
   },
   "libraries": {

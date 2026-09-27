@@ -88,6 +88,7 @@ def create_app(
         cfg: AppConfig = request.app.state.config
         client: QbitClient = request.app.state.qb
         problems = cfg.validate_libraries()
+        auth_mode = getattr(client, "auth_mode", None)
         try:
             version = await client.app_version()
             api_version = await client.api_version()
@@ -95,9 +96,10 @@ def create_app(
                 "ok": True,
                 "version": version,
                 "api_version": api_version,
+                "auth_mode": auth_mode,
             }
         except QbitError as exc:
-            qbittorrent = {"ok": False, "error": str(exc)}
+            qbittorrent = {"ok": False, "error": str(exc), "auth_mode": auth_mode}
         return {
             "qbittorrent": qbittorrent,
             "libraries": {

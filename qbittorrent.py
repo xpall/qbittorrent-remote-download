@@ -1,8 +1,20 @@
 """Minimal async client for the qBittorrent WebUI API.
 
-Supports the subset of the API needed by this app:
-authentication, adding torrents, torrent info/files, renaming
-files and folders and moving a torrent's storage location.
+Supports the subset of the API needed by this app: authentication
+(session cookie or WebUI API key), adding torrents, torrent info/files,
+renaming files and folders and moving a torrent's storage location.
+
+Authentication notes
+--------------------
+- qBittorrent <= 5.1 answers ``/api/v2/auth/login`` with HTTP 200 and the
+  body ``Ok.`` or ``Fails.``.
+- qBittorrent 5.2+ answers with HTTP 204 (empty body) on success and
+  HTTP 401 on failure.
+- When "Bypass authentication for clients on localhost" is enabled the API
+  works without credentials, but ``/auth/login`` still rejects unknown
+  username/password pairs. That case is detected and handled.
+- A WebUI API key (Tools -> Options -> Web UI -> API Key) is sent as
+  ``Authorization: Bearer qbt_...`` and skips the login flow entirely.
 """
 
 from __future__ import annotations
@@ -31,7 +43,12 @@ class QbitUnreachable(QbitError):
 
 
 class QbitAuthError(QbitError):
-    """Login failed or this IP is temporarily banned."""
+    """Login failed, an API key was rejected, or this IP is banned."""
+
+
+def _body_snippet(response: httpx.Response, limit: int = 200) -> str:
+    text = response.text.strip()
+    return text[:limit]
 
 
 def _error_message(response: httpx.Response) -> str:
@@ -49,30 +66,61 @@ def _error_message(response: httpx.Response) -> str:
 
 
 class QbitClient:
-    """Async qBittorrent WebUI API client with cookie based auth."""
+    """Async qBittorrent WebUI API client."""
 
-    def __init__(self, config: QbittorrentConfig) -> None:
+    def __init__(
+        self,
+        config: QbittorrentConfig,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self.config = config
         self.base_url = config.base_url
-        self._http = httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=httpx.Timeout(config.request_timeout, connect=5.0),
-        )
+        self._api_key = (config.api_key or "").strip()
+        self._no_auth = False
         self._logged_in = False
+
+        client_kwargs: dict[str, Any] = {
+            "base_url": self.base_url,
+            "timeout": httpx.Timeout(config.request_timeout, connect=5.0),
+        }
+        if transport is not None:
+            client_kwargs["transport"] = transport
+        self._http = httpx.AsyncClient(**client_kwargs)
+
+    @property
+    def auth_mode(self) -> str:
+        """How requests are authenticated: api-key, password or none."""
+        if self._api_key:
+            return "api-key"
+        if self._no_auth:
+            return "none"
+        return "password"
 
     @property
     def _headers(self) -> dict[str, str]:
-        # qBittorrent validates the Referer/Origin against the Host.
-        return {"Referer": self.base_url, "Origin": self.base_url}
+        # qBittorrent validates the Referer/Origin against the Host for
+        # cookie based sessions; the API key takes precedence server side.
+        headers = {"Referer": self.base_url, "Origin": self.base_url}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+        return headers
 
     async def close(self) -> None:
         await self._http.aclose()
 
     async def login(self) -> None:
+        """Start a cookie session (password auth only)."""
+        if self._api_key:
+            return
+
         try:
             response = await self._http.post(
                 "/api/v2/auth/login",
-                data={"username": self.config.username, "password": self.config.password},
+                data={
+                    "username": self.config.username,
+                    "password": self.config.password,
+                },
                 headers=self._headers,
             )
         except httpx.HTTPError as exc:
@@ -80,14 +128,49 @@ class QbitClient:
                 f"Cannot reach the qBittorrent WebUI at {self.base_url}: {exc}"
             ) from exc
 
+        if 200 <= response.status_code < 300:
+            # <= 5.1 returns "Ok."/"Fails." with HTTP 200; 5.2+ returns 204.
+            if _body_snippet(response).lower().startswith("fails"):
+                raise QbitAuthError("qBittorrent rejected the username or password.")
+            self._logged_in = True
+            return
+
         if response.status_code == 403:
             raise QbitAuthError(
                 "qBittorrent temporarily banned this IP after too many failed logins."
             )
-        if response.status_code != 200 or response.text.strip() != "Ok.":
-            raise QbitAuthError("Invalid qBittorrent WebUI username or password.")
 
-        self._logged_in = True
+        if response.status_code == 401:
+            if await self._allows_unauthenticated_access():
+                self._no_auth = True
+                self._logged_in = True
+                logger.warning(
+                    "qBittorrent rejected the username/password, but the API is "
+                    "reachable without authentication (localhost bypass); "
+                    "continuing unauthenticated."
+                )
+                return
+            raise QbitAuthError(
+                "qBittorrent rejected the username or password (HTTP 401)."
+            )
+
+        raise QbitError(
+            "Unexpected response from the qBittorrent login endpoint: "
+            f"HTTP {response.status_code} {_body_snippet(response)}"
+        )
+
+    async def _allows_unauthenticated_access(self) -> bool:
+        try:
+            response = await self._http.get("/api/v2/app/version", headers=self._headers)
+        except httpx.HTTPError:
+            return False
+        return 200 <= response.status_code < 300
+
+    async def _ensure_ready(self) -> None:
+        if self._api_key or self._no_auth:
+            return
+        if not self._logged_in:
+            await self.login()
 
     async def _request(
         self,
@@ -98,8 +181,7 @@ class QbitClient:
         data: dict[str, Any] | None = None,
         _retry: bool = True,
     ) -> httpx.Response:
-        if not self._logged_in:
-            await self.login()
+        await self._ensure_ready()
 
         try:
             response = await self._http.request(
@@ -111,14 +193,28 @@ class QbitClient:
                 f"Cannot reach the qBittorrent WebUI at {self.base_url}: {exc}"
             ) from exc
 
-        if response.status_code == 403 and _retry:
-            # Session expired (or a fresh ban): try to log in once more.
+        if (
+            response.status_code in (401, 403)
+            and _retry
+            and not self._api_key
+            and not self._no_auth
+        ):
+            # Session expired (or credentials changed): log in once more.
             self._logged_in = False
             await self.login()
             return await self._request(
                 method, path, params=params, data=data, _retry=False
             )
 
+        if response.status_code == 401:
+            if self._api_key:
+                raise QbitAuthError(
+                    "qBittorrent rejected the API key (HTTP 401). Generate a new "
+                    "key in Tools -> Options -> Web UI and update config.json."
+                )
+            raise QbitAuthError(
+                "qBittorrent rejected the request as unauthenticated (HTTP 401)."
+            )
         if response.status_code == 404:
             raise QbitError(f"qBittorrent: not found: {path}")
         if response.status_code >= 400:
