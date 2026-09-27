@@ -3,11 +3,15 @@ Description=qBittorrent download engine (Flatpak)
 Documentation=https://github.com/qbittorrent/qBittorrent
 After=graphical-session.target
 PartOf=graphical-session.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
 ExecStart=/usr/bin/flatpak run org.qbittorrent.qBittorrent
-Restart=always
+# Restart only after a crash (non-zero exit / signal). A clean quit, or a
+# second instance handing over to the running one, must not relaunch it.
+Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
 

@@ -140,6 +140,19 @@ systemctl --user status qbt-remote
 journalctl --user -u qbt-remote -f     # live logs
 ```
 
+qBittorrent is restarted automatically **if it crashes** — but if you quit it
+on purpose, it stays closed, so it does not pop up again while you are trying
+to put it away. Control it with:
+
+```bash
+systemctl --user status qbittorrent
+systemctl --user restart qbittorrent
+systemctl --user stop qbittorrent      # stays stopped until you start it again
+```
+
+Re-run `bash scripts/install-services.sh` any time after updating the project —
+it re-applies the unit files to the running services too.
+
 **One important detail:** qBittorrent is a desktop app, so it can only run
 after you log in. If the machine should keep working after a reboot without
 anyone typing a password, turn on **auto-login** in KDE's login screen settings
@@ -227,6 +240,21 @@ curl -i -H 'Referer: http://127.0.0.1:8080' \
 **"Naming failed" on a download card.**
 qBittorrent refused a rename (usually a name conflict). The download keeps
 going; rename it by hand in qBittorrent or add it again.
+
+**qBittorrent keeps opening by itself.**
+An early version of `qbittorrent.service` used `Restart=always`, which brought
+qBittorrent back even after you quit it. Update the project and re-run the
+installer — it applies the corrected service file to the running unit as well:
+
+```bash
+cd ~/qbittorrent-remote-download && git pull
+bash scripts/install-services.sh
+systemctl --user status qbittorrent
+```
+
+If two qBittorrent windows appear after every login, tell KDE's session manager
+(System Settings → Session → Desktop Session) to **Start with an empty
+session**, so it does not restore qBittorrent next to the service.
 
 **Jellyfin does not show the new movie.**
 New top-level folders are not always detected automatically — trigger a library

@@ -34,17 +34,23 @@ mkdir -p "$UNIT_DIR"
 sed "s|$TEMPLATE_REPO|$REPO_DIR|g" "$REPO_DIR/scripts/qbt-remote.service" \
     > "$UNIT_DIR/qbt-remote.service"
 systemctl --user daemon-reload
-systemctl --user enable --now qbt-remote.service
+systemctl --user enable qbt-remote.service
+systemctl --user restart qbt-remote.service
 say "Installed and started qbt-remote.service (restarts automatically)."
 
 # --- qBittorrent ------------------------------------------------------------
 if systemctl --user is-active --quiet graphical-session.target; then
     cp "$REPO_DIR/scripts/qbittorrent.service" "$UNIT_DIR/qbittorrent.service"
     systemctl --user daemon-reload
-    systemctl --user enable --now qbittorrent.service
-    rm -f "$AUTOSTART_DIR/org.qbittorrent.qBittorrent.desktop"
-    say "Installed and started qbittorrent.service (restarts automatically)."
+    systemctl --user reset-failed qbittorrent.service 2>/dev/null || true
+    systemctl --user enable qbittorrent.service
+    systemctl --user restart qbittorrent.service
+    rm -f "$AUTOSTART_DIR/org.qbittorrent.qBittorrent.desktop" \
+          "$AUTOSTART_DIR/qbittorrent-autostart.desktop"
+    say "Installed and started qbittorrent.service (restarts after a crash)."
 else
+    # Make sure the systemd unit is not left running/starting as well.
+    systemctl --user disable --now qbittorrent.service 2>/dev/null || true
     mkdir -p "$AUTOSTART_DIR"
     cp "$REPO_DIR/scripts/qbittorrent-autostart.desktop" "$AUTOSTART_DIR/"
     say "Installed XDG autostart for qBittorrent (starts at login)."
